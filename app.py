@@ -9,7 +9,7 @@ import streamlit as st
 from PIL import Image
 
 from generator import depth_estimator, mesh_builder, claude_analyzer
-from generator import spaces_generator, onnx_depth
+from generator import spaces_generator, onnx_depth, bg_remover
 
 
 def _secret(key: str, user_input: str = "") -> str | None:
@@ -50,6 +50,13 @@ with st.sidebar:
         st.caption("⚠️ Space が混雑・休止中の場合は数分かかることがあります")
 
     st.divider()
+    remove_bg = st.toggle(
+        "背景を除去する",
+        value=True,
+        help="ONにすると3D生成前に背景を自動除去します。壁が生成されるのを防ぎます。",
+    )
+
+    st.divider()
     anthropic_key = st.text_input("Anthropic API Key（任意）", type="password")
 
     if mode in ("midas_onnx", "grayscale"):
@@ -79,6 +86,17 @@ if api_key:
         if analysis.get("notes"):
             st.write(f"**注意:** {analysis['notes']}")
 
+# ── Background removal preview ───────────────────────────────────────────────
+process_image = image
+if remove_bg:
+    with st.spinner("背景を除去中..."):
+        try:
+            rgba = bg_remover.remove_background(image)
+            process_image = bg_remover.to_white_bg(rgba)
+            col_depth.image(rgba, caption="背景除去後", use_container_width=True)
+        except Exception as e:
+            st.warning(f"背景除去をスキップしました: {e}")
+
 # ── Generate ──────────────────────────────────────────────────────────────────
 if st.button("3D モデルを生成", type="primary", use_container_width=True):
 
@@ -94,7 +112,7 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
         spinner_msg, fn = SPACE_TASKS[mode]
         with st.spinner(spinner_msg):
             try:
-                glb_bytes = fn(image)
+                glb_bytes = fn(process_image)
             except Exception as e:
                 st.error(f"エラー: {e}")
                 st.code(traceback.format_exc())
