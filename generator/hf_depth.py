@@ -12,8 +12,9 @@ import requests
 from PIL import Image
 
 _MODELS = [
-    "depth-anything/Depth-Anything-V2-Small-hf",
-    "depth-anything/Depth-Anything-V2-Large-hf",
+    "Intel/dpt-large",
+    "Intel/dpt-hybrid-midas",
+    "vinvino02/glpn-nyu",
 ]
 _BASE = "https://router.huggingface.co/hf-inference/models/"
 
