@@ -77,25 +77,13 @@ def generate_stable_fast_3d(image: Image.Image) -> bytes:
         os.unlink(tmp)
 
 
-def _trellis_api_params(client) -> set[str]:
-    """Discover available parameter names for /image_to_3d endpoint."""
-    try:
-        info = client.view_api(return_format="dict")
-        for ep in info.get("named_endpoints", {}).values():
-            if ep.get("parameters"):
-                return {p["parameter_name"] for p in ep["parameters"]}
-    except Exception:
-        pass
-    return set()
-
-
 def generate_trellis2(
     image: Image.Image,
     extra_images: list[Image.Image] | None = None,
 ) -> bytes:
     """
     microsoft/TRELLIS.2 — high-quality structured 3D.
-    extra_images: used if the Space supports multiimages, otherwise ignored.
+    Uses positional args to avoid keyword mismatch across Space versions.
     """
     from gradio_client import Client, handle_file
 
@@ -103,32 +91,19 @@ def generate_trellis2(
     extra_tmps = [_save_tmp(img) for img in (extra_images or [])]
     try:
         client = Client("microsoft/TRELLIS.2")
-        params = _trellis_api_params(client)
 
-        kwargs: dict = {
-            "image": handle_file(tmp),
-            "seed": 0,
-            "ss_guidance_strength": 7.5,
-            "ss_sampling_steps": 12,
-            "slat_guidance_strength": 3.0,
-            "slat_sampling_steps": 12,
-        }
-
-        # multiimages は Space が対応している場合のみ追加
-        if extra_tmps and "multiimages" in params:
-            kwargs["multiimages"] = [handle_file(p) for p in extra_tmps]
-            kwargs["multiimage_algo"] = "multidiffusion"
-        elif "multiimages" in params:
-            kwargs["multiimages"] = []
-            kwargs["multiimage_algo"] = "stochastic"
-
-        result = client.predict(**kwargs, api_name="/image_to_3d")
+        # Step 1: image → 3D state (positional only, use Space defaults)
+        result = client.predict(
+            handle_file(tmp),
+            api_name="/image_to_3d",
+        )
         state = result[0] if isinstance(result, (list, tuple)) else result
 
+        # Step 2: state → GLB
         glb_result = client.predict(
-            state=state,
-            mesh_simplify=0.95,
-            texture_size=1024,
+            state,
+            0.95,   # mesh_simplify
+            1024,   # texture_size
             api_name="/extract_glb",
         )
         return _to_bytes(glb_result)
