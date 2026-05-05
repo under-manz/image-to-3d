@@ -1,7 +1,9 @@
+import io
 import os
 import pathlib
 import sys
 import traceback
+import zipfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
@@ -10,6 +12,8 @@ from PIL import Image
 
 from generator import depth_estimator, mesh_builder, claude_analyzer
 from generator import spaces_generator, onnx_depth, bg_remover
+
+BLENDER_DIR = pathlib.Path(__file__).parent / "blender"
 
 
 def _secret(key: str, user_input: str = "") -> str | None:
@@ -21,6 +25,29 @@ def _secret(key: str, user_input: str = "") -> str | None:
         return st.secrets[key]
     except Exception:
         return None
+
+
+def _build_blender_zip(depth_img: Image.Image, texture_img: Image.Image) -> bytes:
+    """Pack depth.png + texture.png + generate_3d.py + launchers into a ZIP."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # depth map
+        d_buf = io.BytesIO()
+        depth_img.save(d_buf, format="PNG")
+        zf.writestr("blender_3d/depth.png", d_buf.getvalue())
+
+        # texture
+        t_buf = io.BytesIO()
+        texture_img.save(t_buf, format="PNG")
+        zf.writestr("blender_3d/texture.png", t_buf.getvalue())
+
+        # scripts
+        for fname in ("generate_3d.py", "run.bat", "run.sh"):
+            p = BLENDER_DIR / fname
+            if p.exists():
+                zf.write(p, f"blender_3d/{fname}")
+
+    return buf.getvalue()
 
 
 st.set_page_config(page_title="Image → 3D (GLB)", layout="wide")
@@ -75,7 +102,7 @@ with st.sidebar:
 
 # ── Upload ────────────────────────────────────────────────────────────────────
 if mode == "trellis2":
-    st.caption("💡 前面は必須。背面・側面を追加すると精度が上がります。")
+    st.caption("前面は必須。背面・側面を追加すると精度が上がります。")
     view_labels = ["前面（メイン・必須）", "背面（任意）", "左側面（任意）", "右側面（任意）"]
     cols = st.columns(4)
     uploaded_files = []
@@ -94,6 +121,7 @@ if not uploaded_files:
 images = [Image.open(f).convert("RGB") for f in uploaded_files]
 image = images[0]
 extra_images = images[1:]
+stem = pathlib.Path(uploaded_files[0].name).stem
 
 if mode == "trellis2":
     st.caption(f"アップロード済み: {len(images)} 枚")
@@ -121,6 +149,44 @@ if remove_bg:
             col_depth.image(rgba, caption="背景除去後", use_container_width=True)
         except Exception as e:
             st.warning(f"背景除去をスキップしました: {e}")
+
+# ── Blender ZIP export (depth-based modes) ────────────────────────────────────
+if mode in ("midas_onnx", "grayscale"):
+    with st.expander("Blender でさらに高品質に生成する"):
+        st.markdown(
+            "深度マップ + テクスチャを ZIP でダウンロードし、"
+            "ローカルの Blender で高品質な GLB を生成できます。\n\n"
+            "1. 下の **Blender用ZIPをダウンロード** を押す\n"
+            "2. ZIP を展開して `run.bat`（Windows）または `run.sh`（Mac/Linux）を実行\n"
+            "3. `output.glb` が生成されます\n\n"
+            "Blender をお持ちでない場合: https://www.blender.org/download/"
+        )
+
+        if st.button("Blender用ZIPを準備", use_container_width=True):
+            with st.spinner("深度マップを生成中..."):
+                try:
+                    import numpy as np
+                    if mode == "midas_onnx":
+                        depth_arr = onnx_depth.estimate_depth(image)
+                    else:
+                        depth_arr = depth_estimator.estimate(image, method="grayscale")
+
+                    d_norm = ((depth_arr - depth_arr.min()) /
+                              (depth_arr.max() - depth_arr.min() + 1e-6) * 255).astype("uint8")
+                    depth_pil = Image.fromarray(d_norm)
+
+                    zip_bytes = _build_blender_zip(depth_pil, process_image)
+
+                    st.download_button(
+                        label="Blender用ZIPをダウンロード",
+                        data=zip_bytes,
+                        file_name=f"{stem}_blender.zip",
+                        mime="application/zip",
+                        use_container_width=True,
+                    )
+                except Exception as e:
+                    st.error(f"エラー: {e}")
+                    st.code(traceback.format_exc())
 
 # ── Generate ──────────────────────────────────────────────────────────────────
 if st.button("3D モデルを生成", type="primary", use_container_width=True):
@@ -182,7 +248,6 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
 
     if glb_bytes:
         st.success(f"完了！  {len(glb_bytes)/1024:.1f} KB")
-        stem = pathlib.Path(uploaded.name).stem
         st.download_button(
             label="GLB をダウンロード",
             data=glb_bytes,
