@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import requests
 from PIL import Image
 
 
@@ -16,21 +17,54 @@ def _save_tmp(image: Image.Image) -> str:
     return tmp.name
 
 
-def _read_file(path) -> bytes:
-    """Read GLB bytes from a local path returned by gradio_client."""
-    if isinstance(path, tuple):
-        path = path[0]
-    if isinstance(path, dict):
-        path = path.get("path") or path.get("name") or next(iter(path.values()))
-    with open(str(path), "rb") as f:
-        return f.read()
+def _to_bytes(item) -> bytes:
+    """
+    Convert any gradio_client output item to raw bytes.
+    Handles: local path str, FileData object, dict, URL str, list/tuple.
+    """
+    # FileData object (gradio_client >= 1.0)
+    if hasattr(item, "path") and item.path:
+        return _to_bytes(item.path)
+    if hasattr(item, "url") and item.url:
+        return _to_bytes(item.url)
+
+    # dict
+    if isinstance(item, dict):
+        for key in ("path", "name", "url", "value"):
+            if item.get(key):
+                return _to_bytes(item[key])
+
+    # URL
+    if isinstance(item, str) and item.startswith("http"):
+        resp = requests.get(item, timeout=180)
+        resp.raise_for_status()
+        return resp.content
+
+    # local path
+    if isinstance(item, str):
+        if not os.path.exists(item):
+            raise FileNotFoundError(f"Output file not found: {item}")
+        with open(item, "rb") as f:
+            return f.read()
+
+    # list / tuple — prefer GLB magic bytes
+    if isinstance(item, (list, tuple)):
+        candidates = []
+        for sub in item:
+            try:
+                raw = _to_bytes(sub)
+                candidates.append(raw)
+                if raw[:4] == b"glTF":
+                    return raw
+            except Exception:
+                continue
+        if candidates:
+            return candidates[-1]
+
+    raise ValueError(f"Cannot convert to bytes: {type(item)} = {repr(item)[:200]}")
 
 
 def generate_trellis(image: Image.Image) -> bytes:
-    """
-    JeffreyXiang/TRELLIS — high-quality structured 3D generation.
-    Two-step: image_to_3d → extract_glb
-    """
     from gradio_client import Client, handle_file
 
     tmp = _save_tmp(image)
@@ -51,87 +85,59 @@ def generate_trellis(image: Image.Image) -> bytes:
         )
         state = result[0] if isinstance(result, (list, tuple)) else result
 
-        # Step 2: state → GLB file
+        # Step 2: state → GLB
         glb_result = client.predict(
             state=state,
             mesh_simplify=0.95,
             texture_size=1024,
             api_name="/extract_glb",
         )
-        glb_path = glb_result[0] if isinstance(glb_result, (list, tuple)) else glb_result
-        return _read_file(glb_path)
+        return _to_bytes(glb_result)
     finally:
         os.unlink(tmp)
 
 
 def generate_triposr(image: Image.Image) -> bytes:
-    """
-    stabilityai/TripoSR — fast single-image 3D reconstruction.
-    """
     from gradio_client import Client, handle_file
 
     tmp = _save_tmp(image)
     try:
         client = Client("stabilityai/TripoSR")
         result = client.predict(
-            handle_file(tmp),   # image
-            True,               # do_remove_background
-            0.9,                # foreground_ratio
-            256,                # mc_resolution
-            ["glb"],            # output_formats
+            handle_file(tmp),
+            True,
+            0.9,
+            256,
+            ["glb"],
             api_name="/generate",
         )
-        # result: list of output file paths
-        if isinstance(result, (list, tuple)):
-            for item in result:
-                try:
-                    raw = _read_file(item)
-                    if raw[:4] == b"glTF":
-                        return raw
-                except Exception:
-                    continue
-            return _read_file(result[-1])
-        return _read_file(result)
+        return _to_bytes(result)
     finally:
         os.unlink(tmp)
 
 
 def generate_instantmesh(image: Image.Image) -> bytes:
-    """
-    TencentARC/InstantMesh — multi-view 3D reconstruction.
-    """
     from gradio_client import Client, handle_file
 
     tmp = _save_tmp(image)
     try:
         client = Client("TencentARC/InstantMesh")
-        # Step 1: preprocess
+
         preprocessed = client.predict(
             handle_file(tmp),
-            True,   # remove_background
+            True,
             api_name="/preprocess",
         )
-        # Step 2: generate multi-view
         mv_result = client.predict(
             preprocessed,
-            42,     # seed
-            75,     # sample_steps
+            42,
+            75,
             api_name="/generate_mvs",
         )
-        # Step 3: reconstruct 3D
         mesh_result = client.predict(
             mv_result,
             api_name="/make3d",
         )
-        # mesh_result: (video_path, obj_path, glb_path)
-        if isinstance(mesh_result, (list, tuple)):
-            for item in reversed(mesh_result):
-                try:
-                    raw = _read_file(item)
-                    if raw[:4] == b"glTF":
-                        return raw
-                except Exception:
-                    continue
-        return _read_file(mesh_result)
+        return _to_bytes(mesh_result)
     finally:
         os.unlink(tmp)
