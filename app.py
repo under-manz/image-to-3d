@@ -8,7 +8,7 @@ import streamlit as st
 from PIL import Image
 
 from generator import depth_estimator, mesh_builder, claude_analyzer
-from generator import replicate_generator, onnx_depth
+from generator import spaces_generator, onnx_depth
 
 
 def _secret(key: str, user_input: str = "") -> str | None:
@@ -26,48 +26,37 @@ st.set_page_config(page_title="Image → 3D (GLB)", layout="wide")
 st.title("Image → 3D GLB Generator")
 st.caption("PNG / JPEG をアップロードして GLB 形式の 3D モデルを生成します")
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("生成モード")
 
     MODE_LABELS = {
-        "hunyuan":    "★★★★  Hunyuan 3D（最高品質 / ~$0.05）",
-        "triposr":    "★★★   TripoSR（高速高品質 / ~$0.01）",
-        "midas_onnx": "★★    MiDaS ONNX（完全無料・API不要）",
-        "grayscale":  "★     Grayscale（最速・低品質）",
+        "trellis":      "★★★★  TRELLIS（最高品質・無料）",
+        "triposr":      "★★★   TripoSR（高速・無料）",
+        "instantmesh":  "★★★   InstantMesh（高品質・無料）",
+        "midas_onnx":   "★★    MiDaS ONNX（完全ローカル・無料）",
+        "grayscale":    "★     Grayscale（最速・低品質）",
     }
 
     mode = st.selectbox(
         "モード",
         list(MODE_LABELS.keys()),
         format_func=lambda k: MODE_LABELS[k],
-        index=1,
+        index=0,
     )
+
+    if mode in ("trellis", "triposr", "instantmesh"):
+        st.caption("HuggingFace Spaces を使用（カード不要・アカウント不要）")
+        st.caption("⚠️ Spaceが混雑中の場合は待ち時間が発生します")
 
     st.divider()
 
-    replicate_key = ""
-    anthropic_key = ""
-
-    if mode in ("hunyuan", "triposr"):
-        replicate_key = st.text_input(
-            "Replicate API Token",
-            type="password",
-            help="replicate.com/account/api-tokens",
-        )
-        if not _secret("REPLICATE_API_TOKEN", replicate_key):
-            st.warning("Replicate API Token が必要です")
-
-    anthropic_key = st.text_input(
-        "Anthropic API Key（任意）",
-        type="password",
-    )
+    anthropic_key = st.text_input("Anthropic API Key（任意）", type="password")
 
     if mode in ("midas_onnx", "grayscale"):
         st.divider()
         st.subheader("メッシュ設定")
-        resolution  = st.select_slider("解像度", options=[64, 128, 256, 512], value=256)
-        depth_scale = st.slider("奥行きスケール", 0.05, 1.0, 0.3, step=0.05)
+        resolution   = st.select_slider("解像度", options=[64, 128, 256, 512], value=256)
+        depth_scale  = st.slider("奥行きスケール", 0.05, 1.0, 0.3, step=0.05)
         invert_depth = st.toggle("深度を反転", value=False)
 
 # ── Upload ────────────────────────────────────────────────────────────────────
@@ -95,32 +84,32 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
 
     glb_bytes: bytes | None = None
 
-    if mode == "hunyuan":
-        token = _secret("REPLICATE_API_TOKEN", replicate_key)
-        if not token:
-            st.error("Replicate API Token を入力してください")
-            st.stop()
-        with st.spinner("Hunyuan 3D で生成中（1〜3分）..."):
+    if mode == "trellis":
+        with st.spinner("TRELLIS で生成中（2〜5分、初回はSpaceの起動待ちあり）..."):
             try:
-                glb_bytes = replicate_generator.generate_hunyuan(image, token)
+                glb_bytes = spaces_generator.generate_trellis(image)
             except Exception as e:
-                st.error(f"Hunyuan エラー: {e}")
+                st.error(f"TRELLIS エラー: {e}")
                 st.stop()
 
     elif mode == "triposr":
-        token = _secret("REPLICATE_API_TOKEN", replicate_key)
-        if not token:
-            st.error("Replicate API Token を入力してください")
-            st.stop()
-        with st.spinner("TripoSR で生成中（30〜60秒）..."):
+        with st.spinner("TripoSR で生成中（1〜3分）..."):
             try:
-                glb_bytes = replicate_generator.generate_triposr(image, token)
+                glb_bytes = spaces_generator.generate_triposr(image)
             except Exception as e:
                 st.error(f"TripoSR エラー: {e}")
                 st.stop()
 
+    elif mode == "instantmesh":
+        with st.spinner("InstantMesh で生成中（2〜5分）..."):
+            try:
+                glb_bytes = spaces_generator.generate_instantmesh(image)
+            except Exception as e:
+                st.error(f"InstantMesh エラー: {e}")
+                st.stop()
+
     elif mode == "midas_onnx":
-        with st.spinner("MiDaS で深度推定中（初回はモデルDL約50MB）..."):
+        with st.spinner("MiDaS で深度推定中（初回はモデルDL ~50MB）..."):
             try:
                 import numpy as np
                 depth = onnx_depth.estimate_depth(image)
