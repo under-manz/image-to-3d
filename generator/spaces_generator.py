@@ -77,14 +77,25 @@ def generate_stable_fast_3d(image: Image.Image) -> bytes:
         os.unlink(tmp)
 
 
+def _trellis_api_params(client) -> set[str]:
+    """Discover available parameter names for /image_to_3d endpoint."""
+    try:
+        info = client.view_api(return_format="dict")
+        for ep in info.get("named_endpoints", {}).values():
+            if ep.get("parameters"):
+                return {p["parameter_name"] for p in ep["parameters"]}
+    except Exception:
+        pass
+    return set()
+
+
 def generate_trellis2(
     image: Image.Image,
     extra_images: list[Image.Image] | None = None,
 ) -> bytes:
     """
-    microsoft/TRELLIS.2 — high-quality 4B parameter structured 3D.
-    extra_images: additional views (back, side, etc.) for better reconstruction.
-    Two-step: image_to_3d → extract_glb
+    microsoft/TRELLIS.2 — high-quality structured 3D.
+    extra_images: used if the Space supports multiimages, otherwise ignored.
     """
     from gradio_client import Client, handle_file
 
@@ -92,21 +103,26 @@ def generate_trellis2(
     extra_tmps = [_save_tmp(img) for img in (extra_images or [])]
     try:
         client = Client("microsoft/TRELLIS.2")
+        params = _trellis_api_params(client)
 
-        multiimages = [handle_file(p) for p in extra_tmps]
-        algo = "multidiffusion" if multiimages else "stochastic"
+        kwargs: dict = {
+            "image": handle_file(tmp),
+            "seed": 0,
+            "ss_guidance_strength": 7.5,
+            "ss_sampling_steps": 12,
+            "slat_guidance_strength": 3.0,
+            "slat_sampling_steps": 12,
+        }
 
-        result = client.predict(
-            image=handle_file(tmp),
-            multiimages=multiimages,
-            seed=0,
-            ss_guidance_strength=7.5,
-            ss_sampling_steps=12,
-            slat_guidance_strength=3.0,
-            slat_sampling_steps=12,
-            multiimage_algo=algo,
-            api_name="/image_to_3d",
-        )
+        # multiimages は Space が対応している場合のみ追加
+        if extra_tmps and "multiimages" in params:
+            kwargs["multiimages"] = [handle_file(p) for p in extra_tmps]
+            kwargs["multiimage_algo"] = "multidiffusion"
+        elif "multiimages" in params:
+            kwargs["multiimages"] = []
+            kwargs["multiimage_algo"] = "stochastic"
+
+        result = client.predict(**kwargs, api_name="/image_to_3d")
         state = result[0] if isinstance(result, (list, tuple)) else result
 
         glb_result = client.predict(
