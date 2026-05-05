@@ -46,8 +46,15 @@ with st.sidebar:
     )
 
     if mode in ("sf3d", "trellis2", "triposg"):
-        st.caption("HuggingFace Spaces 使用（カード不要・アカウント不要）")
-        st.caption("⚠️ Space が混雑・休止中の場合は数分かかることがあります")
+        st.caption("HuggingFace Spaces 使用（ZeroGPU）")
+        st.caption("⚠️ HF Token が必要です（無料アカウントで取得可）")
+
+    st.divider()
+    hf_key = st.text_input(
+        "HuggingFace Token（Spaces使用時に必要）",
+        type="password",
+        help="huggingface.co/settings/tokens で Write トークンを取得",
+    )
 
     st.divider()
     remove_bg = st.toggle(
@@ -120,6 +127,8 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
 
     glb_bytes: bytes | None = None
 
+    hf_token = _secret("HF_TOKEN", hf_key) or None
+
     if mode == "trellis2":
         n = len(images)
         msg = f"TRELLIS.2 で生成中（{n}枚使用 / 2〜5分）..."
@@ -127,7 +136,7 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
             try:
                 extra = [bg_remover.to_white_bg(bg_remover.remove_background(img))
                          for img in extra_images] if remove_bg else extra_images
-                glb_bytes = spaces_generator.generate_trellis2(process_image, extra)
+                glb_bytes = spaces_generator.generate_trellis2(process_image, extra, hf_token)
             except Exception as e:
                 st.error(f"エラー: {e}")
                 st.code(traceback.format_exc())
@@ -141,7 +150,7 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
         spinner_msg, fn = SPACE_TASKS[mode]
         with st.spinner(spinner_msg):
             try:
-                glb_bytes = fn(process_image)
+                glb_bytes = fn(process_image, hf_token)
             except Exception as e:
                 st.error(f"エラー: {e}")
                 st.code(traceback.format_exc())

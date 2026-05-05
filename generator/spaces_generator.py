@@ -54,22 +54,17 @@ def _to_bytes(item) -> bytes:
     raise ValueError(f"Cannot convert to bytes: {type(item)}")
 
 
-def generate_stable_fast_3d(image: Image.Image) -> bytes:
-    """
-    stabilityai/stable-fast-3d — fast textured 3D mesh in <1 second.
-    https://huggingface.co/spaces/stabilityai/stable-fast-3d
-    """
+def generate_stable_fast_3d(image: Image.Image, hf_token: str | None = None) -> bytes:
     from gradio_client import Client, handle_file
-
     tmp = _save_tmp(image)
     try:
-        client = Client("stabilityai/stable-fast-3d")
+        client = Client("stabilityai/stable-fast-3d", hf_token=hf_token)
         result = client.predict(
             handle_file(tmp),
-            0.5,          # foreground_ratio
-            "none",       # background_choice: "none" / "grey" / "white"
-            "triangle",   # remesh_choice
-            0,            # vertex_count  (0 = auto)
+            0.5,
+            "none",
+            "triangle",
+            0,
             api_name="/run",
         )
         return _to_bytes(result)
@@ -80,30 +75,22 @@ def generate_stable_fast_3d(image: Image.Image) -> bytes:
 def generate_trellis2(
     image: Image.Image,
     extra_images: list[Image.Image] | None = None,
+    hf_token: str | None = None,
 ) -> bytes:
-    """
-    microsoft/TRELLIS.2 — high-quality structured 3D.
-    Uses positional args to avoid keyword mismatch across Space versions.
-    """
     from gradio_client import Client, handle_file
-
     tmp = _save_tmp(image)
     extra_tmps = [_save_tmp(img) for img in (extra_images or [])]
     try:
-        client = Client("microsoft/TRELLIS.2")
-
-        # Step 1: image → 3D state (positional only, use Space defaults)
+        client = Client("microsoft/TRELLIS.2", hf_token=hf_token)
         result = client.predict(
             handle_file(tmp),
             api_name="/image_to_3d",
         )
         state = result[0] if isinstance(result, (list, tuple)) else result
-
-        # Step 2: state → GLB
         glb_result = client.predict(
             state,
-            0.95,   # mesh_simplify
-            1024,   # texture_size
+            0.95,
+            1024,
             api_name="/extract_glb",
         )
         return _to_bytes(glb_result)
@@ -113,16 +100,11 @@ def generate_trellis2(
             os.unlink(p)
 
 
-def generate_triposg(image: Image.Image) -> bytes:
-    """
-    VAST-AI/TripoSG — high-fidelity 3D shape synthesis.
-    https://huggingface.co/spaces/VAST-AI/TripoSG
-    """
+def generate_triposg(image: Image.Image, hf_token: str | None = None) -> bytes:
     from gradio_client import Client, handle_file
-
     tmp = _save_tmp(image)
     try:
-        client = Client("VAST-AI/TripoSG")
+        client = Client("VAST-AI/TripoSG", hf_token=hf_token)
         result = client.predict(
             handle_file(tmp),
             api_name="/generate",
