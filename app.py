@@ -31,11 +31,11 @@ with st.sidebar:
     st.header("生成モード")
 
     MODE_LABELS = {
-        "trellis":      "★★★★  TRELLIS（最高品質・無料）",
-        "triposr":      "★★★   TripoSR（高速・無料）",
-        "instantmesh":  "★★★   InstantMesh（高品質・無料）",
-        "midas_onnx":   "★★    MiDaS ONNX（完全ローカル・無料）",
-        "grayscale":    "★     Grayscale（最速・低品質）",
+        "sf3d":       "★★★★  Stable Fast 3D（高速・無料）",
+        "trellis2":   "★★★★  TRELLIS.2 Microsoft（最高品質・無料）",
+        "triposg":    "★★★   TripoSG（高品質・無料）",
+        "midas_onnx": "★★    MiDaS ONNX（ローカル・無料）",
+        "grayscale":  "★     Grayscale（最速・低品質）",
     }
 
     mode = st.selectbox(
@@ -45,12 +45,11 @@ with st.sidebar:
         index=0,
     )
 
-    if mode in ("trellis", "triposr", "instantmesh"):
-        st.caption("HuggingFace Spaces を使用（カード不要・アカウント不要）")
-        st.caption("⚠️ Spaceが混雑中の場合は待ち時間が発生します")
+    if mode in ("sf3d", "trellis2", "triposg"):
+        st.caption("HuggingFace Spaces 使用（カード不要・アカウント不要）")
+        st.caption("⚠️ Space が混雑・休止中の場合は数分かかることがあります")
 
     st.divider()
-
     anthropic_key = st.text_input("Anthropic API Key（任意）", type="password")
 
     if mode in ("midas_onnx", "grayscale"):
@@ -85,30 +84,19 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
 
     glb_bytes: bytes | None = None
 
-    if mode == "trellis":
-        with st.spinner("TRELLIS で生成中（2〜5分、初回はSpaceの起動待ちあり）..."):
-            try:
-                glb_bytes = spaces_generator.generate_trellis(image)
-            except Exception as e:
-                st.error(f"TRELLIS エラー: {e}")
-                st.code(traceback.format_exc())
-                st.stop()
+    SPACE_TASKS = {
+        "sf3d":     ("Stable Fast 3D で生成中（30秒〜2分）...",    spaces_generator.generate_stable_fast_3d),
+        "trellis2": ("TRELLIS.2 で生成中（2〜5分）...",            spaces_generator.generate_trellis2),
+        "triposg":  ("TripoSG で生成中（1〜3分）...",              spaces_generator.generate_triposg),
+    }
 
-    elif mode == "triposr":
-        with st.spinner("TripoSR で生成中（1〜3分）..."):
+    if mode in SPACE_TASKS:
+        spinner_msg, fn = SPACE_TASKS[mode]
+        with st.spinner(spinner_msg):
             try:
-                glb_bytes = spaces_generator.generate_triposr(image)
+                glb_bytes = fn(image)
             except Exception as e:
-                st.error(f"TripoSR エラー: {e}")
-                st.code(traceback.format_exc())
-                st.stop()
-
-    elif mode == "instantmesh":
-        with st.spinner("InstantMesh で生成中（2〜5分）..."):
-            try:
-                glb_bytes = spaces_generator.generate_instantmesh(image)
-            except Exception as e:
-                st.error(f"InstantMesh エラー: {e}")
+                st.error(f"エラー: {e}")
                 st.code(traceback.format_exc())
                 st.stop()
 
@@ -119,6 +107,7 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
                 depth = onnx_depth.estimate_depth(image)
             except Exception as e:
                 st.error(f"深度推定エラー: {e}")
+                st.code(traceback.format_exc())
                 st.stop()
         d_vis = ((depth - depth.min()) / (depth.max() - depth.min() + 1e-6) * 255).astype("uint8")
         col_depth.image(d_vis, caption="MiDaS 深度マップ", use_container_width=True)
