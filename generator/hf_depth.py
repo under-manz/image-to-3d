@@ -12,11 +12,11 @@ import requests
 from PIL import Image
 
 _MODELS = [
-    "depth-anything/Depth-Anything-V2-Small",   # 小さい方を先に試す
-    "depth-anything/Depth-Anything-V2-Large",
-    "Intel/dpt-large",                           # 最終フォールバック
+    "depth-anything/Depth-Anything-V2-Small-hf",
+    "depth-anything/Depth-Anything-V2-Large-hf",
+    "Intel/dpt-large",
 ]
-_BASE = "https://api-inference.huggingface.co/models/"
+_BASE = "https://router.huggingface.co/hf-inference/models/"
 
 
 def estimate_depth(image: Image.Image, hf_token: str) -> np.ndarray:
