@@ -1,15 +1,11 @@
 """
 High-quality image-to-3D via Replicate API.
-
-Models:
-  trellis  : firtoz/trellis          — ~$0.034/run, ~25秒
-  triposr  : camenduru/tripo-sr      — 高速・軽量
-  hunyuan  : tencent/hunyuan-3d-3.1  — 高品質テクスチャ
 """
 from __future__ import annotations
 
 import os
 import tempfile
+import time
 import requests
 from PIL import Image
 
@@ -35,7 +31,6 @@ def _read_output(output) -> bytes:
         return resp.content
 
     if isinstance(output, list):
-        # GLBマジックバイト b"glTF" を優先
         results = []
         for item in output:
             try:
@@ -56,27 +51,37 @@ def _read_output(output) -> bytes:
     raise ValueError(f"Cannot read Replicate output: {type(output)}")
 
 
-def _run(api_token: str, model: str, **input_kwargs) -> bytes:
+def _run_with_retry(api_token: str, model: str, input_data: dict, retries: int = 3) -> bytes:
     import replicate
     os.environ["REPLICATE_API_TOKEN"] = api_token
-    output = replicate.run(model, input=input_kwargs)
-    return _read_output(output)
 
-
-def generate_trellis(image: Image.Image, api_token: str) -> bytes:
-    tmp = _save_tmp(image)
-    try:
-        with open(tmp, "rb") as f:
-            return _run(api_token, "firtoz/trellis", image=f)
-    finally:
-        os.unlink(tmp)
+    for attempt in range(retries):
+        try:
+            output = replicate.run(model, input=input_data)
+            return _read_output(output)
+        except Exception as e:
+            err = str(e)
+            if "429" in err and attempt < retries - 1:
+                # レート制限 → 少し待ってリトライ
+                time.sleep(5 * (attempt + 1))
+                continue
+            raise
 
 
 def generate_triposr(image: Image.Image, api_token: str) -> bytes:
     tmp = _save_tmp(image)
     try:
         with open(tmp, "rb") as f:
-            return _run(api_token, "camenduru/tripo-sr", image=f)
+            return _run_with_retry(
+                api_token,
+                "camenduru/tripo-sr:e0d3fe8abce3ba86497ea3530d9eae59af7b2231b6c82bedfc32b0732d35ec3a",
+                {
+                    "image": f,
+                    "do_remove_background": True,
+                    "foreground_ratio": 0.9,
+                    "marching_cubes_resolution": 256,
+                },
+            )
     finally:
         os.unlink(tmp)
 
@@ -85,11 +90,13 @@ def generate_hunyuan(image: Image.Image, api_token: str) -> bytes:
     tmp = _save_tmp(image)
     try:
         with open(tmp, "rb") as f:
-            return _run(
+            return _run_with_retry(
                 api_token,
                 "tencent/hunyuan-3d-3.1",
-                image=f,
-                export_format="glb",
+                {
+                    "image": f,
+                    "enable_pbr": True,
+                },
             )
     finally:
         os.unlink(tmp)
