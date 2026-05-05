@@ -144,8 +144,12 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
         if not token:
             st.error("HuggingFace Token を入力してください")
             st.stop()
-        with st.spinner("Depth Anything V2 で深度推定中..."):
-            depth = hf_depth.estimate_depth(image, token)
+        with st.spinner("Depth Anything V2 で深度推定中（モデル初回起動時は1分ほどかかります）..."):
+            try:
+                depth = hf_depth.estimate_depth(image, token)
+            except Exception as e:
+                st.error(str(e))
+                st.stop()
         d_vis = ((depth - depth.min()) / (depth.max() - depth.min() + 1e-6) * 255).astype("uint8")
         col_depth.image(d_vis, caption="Depth Anything V2 深度マップ", use_container_width=True)
         with st.spinner("メッシュ構築中..."):
