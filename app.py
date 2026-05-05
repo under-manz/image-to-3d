@@ -39,8 +39,9 @@ with st.sidebar:
     st.header("生成モード")
 
     MODE_LABELS = {
-        "trellis":    "★★★★  TRELLIS（最高品質 / Replicate）",
-        "triposr":    "★★★   InstantMesh（高品質 / Replicate）",
+        "hunyuan":    "★★★★  Hunyuan 3D（最高品質 / Replicate ~$0.05）",
+        "trellis":    "★★★★  TRELLIS（高品質 / Replicate ~$0.03）",
+        "triposr":    "★★★   TripoSR（高速 / Replicate ~$0.01）",
         "midas_onnx": "★★    MiDaS ONNX（無料・API不要）",
         "grayscale":  "★     Grayscale（最速・低品質）",
     }
@@ -108,7 +109,19 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
 
     glb_bytes: bytes | None = None
 
-    if mode == "trellis":
+    if mode == "hunyuan":
+        token = _secret("REPLICATE_API_TOKEN", replicate_key)
+        if not token:
+            st.error("Replicate API Token を入力してください")
+            st.stop()
+        with st.spinner("Hunyuan 3D で生成中（1〜3分）..."):
+            try:
+                glb_bytes = replicate_generator.generate_hunyuan(image, token)
+            except Exception as e:
+                st.error(f"Hunyuan エラー: {e}")
+                st.stop()
+
+    elif mode == "trellis":
         token = _secret("REPLICATE_API_TOKEN", replicate_key)
         if not token:
             st.error("Replicate API Token を入力してください")
