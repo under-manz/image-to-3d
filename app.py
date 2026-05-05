@@ -40,7 +40,7 @@ with st.sidebar:
 
     MODE_LABELS = {
         "trellis":    "★★★★  TRELLIS（最高品質 / Replicate）",
-        "triposr":    "★★★   TripoSR（高品質 / Replicate）",
+        "triposr":    "★★★   InstantMesh（高品質 / Replicate）",
         "midas_onnx": "★★    MiDaS ONNX（無料・API不要）",
         "grayscale":  "★     Grayscale（最速・低品質）",
     }

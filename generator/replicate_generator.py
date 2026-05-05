@@ -46,6 +46,10 @@ def _read_output(output) -> bytes:
 
 
 def generate_triposr(image: Image.Image, api_token: str) -> bytes:
+    """
+    InstantMesh: fast multi-view 3D reconstruction.
+    https://replicate.com/lucataco/instantmesh
+    """
     import replicate
 
     os.environ["REPLICATE_API_TOKEN"] = api_token
@@ -53,13 +57,11 @@ def generate_triposr(image: Image.Image, api_token: str) -> bytes:
     try:
         with open(tmp_path, "rb") as f:
             output = replicate.run(
-                "stability-ai/triposr",
+                "lucataco/instantmesh",
                 input={
                     "image": f,
-                    "output_format": "glb",
+                    "export_texmap": True,
                     "remove_background": True,
-                    "foreground_ratio": 0.85,
-                    "mc_resolution": 256,
                 },
             )
     finally:
