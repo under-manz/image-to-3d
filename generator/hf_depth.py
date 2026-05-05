@@ -14,9 +14,10 @@ from PIL import Image
 _MODELS = [
     "depth-anything/Depth-Anything-V2-Small-hf",
     "depth-anything/Depth-Anything-V2-Large-hf",
+    "Intel/dpt-hybrid-midas",
     "Intel/dpt-large",
 ]
-_BASE = "https://router.huggingface.co/hf-inference/models/"
+_BASE = "https://api-inference.huggingface.co/models/"
 
 
 def estimate_depth(image: Image.Image, hf_token: str) -> np.ndarray:
