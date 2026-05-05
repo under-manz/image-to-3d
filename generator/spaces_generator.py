@@ -54,17 +54,20 @@ def _to_bytes(item) -> bytes:
     raise ValueError(f"Cannot convert to bytes: {type(item)}")
 
 
+def _client(space_id: str, hf_token: str | None = None):
+    from gradio_client import Client
+    if hf_token:
+        os.environ["HF_TOKEN"] = hf_token
+    return Client(space_id)
+
+
 def generate_stable_fast_3d(image: Image.Image, hf_token: str | None = None) -> bytes:
-    from gradio_client import Client, handle_file
+    from gradio_client import handle_file
     tmp = _save_tmp(image)
     try:
-        client = Client("stabilityai/stable-fast-3d", hf_token=hf_token)
+        client = _client("stabilityai/stable-fast-3d", hf_token)
         result = client.predict(
-            handle_file(tmp),
-            0.5,
-            "none",
-            "triangle",
-            0,
+            handle_file(tmp), 0.5, "none", "triangle", 0,
             api_name="/run",
         )
         return _to_bytes(result)
@@ -77,22 +80,14 @@ def generate_trellis2(
     extra_images: list[Image.Image] | None = None,
     hf_token: str | None = None,
 ) -> bytes:
-    from gradio_client import Client, handle_file
+    from gradio_client import handle_file
     tmp = _save_tmp(image)
     extra_tmps = [_save_tmp(img) for img in (extra_images or [])]
     try:
-        client = Client("microsoft/TRELLIS.2", hf_token=hf_token)
-        result = client.predict(
-            handle_file(tmp),
-            api_name="/image_to_3d",
-        )
+        client = _client("microsoft/TRELLIS.2", hf_token)
+        result = client.predict(handle_file(tmp), api_name="/image_to_3d")
         state = result[0] if isinstance(result, (list, tuple)) else result
-        glb_result = client.predict(
-            state,
-            0.95,
-            1024,
-            api_name="/extract_glb",
-        )
+        glb_result = client.predict(state, 0.95, 1024, api_name="/extract_glb")
         return _to_bytes(glb_result)
     finally:
         os.unlink(tmp)
@@ -101,14 +96,11 @@ def generate_trellis2(
 
 
 def generate_triposg(image: Image.Image, hf_token: str | None = None) -> bytes:
-    from gradio_client import Client, handle_file
+    from gradio_client import handle_file
     tmp = _save_tmp(image)
     try:
-        client = Client("VAST-AI/TripoSG", hf_token=hf_token)
-        result = client.predict(
-            handle_file(tmp),
-            api_name="/generate",
-        )
+        client = _client("VAST-AI/TripoSG", hf_token)
+        result = client.predict(handle_file(tmp), api_name="/generate")
         return _to_bytes(result)
     finally:
         os.unlink(tmp)
