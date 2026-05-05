@@ -114,7 +114,11 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
             st.error("Replicate API Token を入力してください")
             st.stop()
         with st.spinner("TRELLIS で 3D 生成中（1〜3分）..."):
-            glb_bytes = replicate_generator.generate_trellis(image, token)
+            try:
+                glb_bytes = replicate_generator.generate_trellis(image, token)
+            except Exception as e:
+                st.error(f"TRELLIS エラー: {e}")
+                st.stop()
 
     elif mode == "triposr":
         token = _secret("REPLICATE_API_TOKEN", replicate_key)
@@ -122,7 +126,11 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
             st.error("Replicate API Token を入力してください")
             st.stop()
         with st.spinner("TripoSR で 3D 生成中（30〜60秒）..."):
-            glb_bytes = replicate_generator.generate_triposr(image, token)
+            try:
+                glb_bytes = replicate_generator.generate_triposr(image, token)
+            except Exception as e:
+                st.error(f"TripoSR エラー: {e}")
+                st.stop()
 
     elif mode == "midas_onnx":
         with st.spinner("MiDaS モデルをダウンロード中（初回のみ）..."):
