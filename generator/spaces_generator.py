@@ -61,14 +61,30 @@ def _client(space_id: str, hf_token: str | None = None):
     return Client(space_id)
 
 
+def _first_api_name(client) -> str | None:
+    """Return the first available named endpoint."""
+    try:
+        info = client.view_api(return_format="dict")
+        endpoints = list(info.get("named_endpoints", {}).keys())
+        if endpoints:
+            return endpoints[0]
+    except Exception:
+        pass
+    return None
+
+
 def generate_stable_fast_3d(image: Image.Image, hf_token: str | None = None) -> bytes:
     from gradio_client import handle_file
     tmp = _save_tmp(image)
     try:
         client = _client("stabilityai/stable-fast-3d", hf_token)
+
+        # エンドポイント名を自動検出
+        api_name = _first_api_name(client) or "/generate"
+
         result = client.predict(
-            handle_file(tmp), 0.5, "none", "triangle", 0,
-            api_name="/run",
+            handle_file(tmp),
+            api_name=api_name,
         )
         return _to_bytes(result)
     finally:
