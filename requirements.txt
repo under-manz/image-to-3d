@@ -1,0 +1,8 @@
+# クラウド（Streamlit Community Cloud）対応版
+# torch / transformers は含めない → grayscale モード動作
+streamlit>=1.35.0
+Pillow>=10.0.0
+numpy>=1.24.0
+trimesh>=4.4.0
+pygltflib>=1.16.0
+anthropic>=0.30.0

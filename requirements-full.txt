@@ -1,0 +1,4 @@
+# ローカル環境用（MiDaS 深度推定を使いたい場合）
+-r requirements.txt
+torch>=2.0.0
+transformers>=4.40.0
