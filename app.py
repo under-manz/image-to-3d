@@ -67,35 +67,32 @@ with st.sidebar:
         invert_depth = st.toggle("深度を反転", value=False)
 
 # ── Upload ────────────────────────────────────────────────────────────────────
-multi_mode = mode == "trellis2"
-
-if multi_mode:
-    st.caption("💡 TRELLIS.2 は複数枚対応です。前面・背面・側面など複数アップロードすると精度が上がります。")
-
-uploaded_files = st.file_uploader(
-    "画像をアップロード（TRELLIS.2 は複数枚可）",
-    type=["png", "jpg", "jpeg", "webp"],
-    accept_multiple_files=multi_mode,
-)
+if mode == "trellis2":
+    st.caption("💡 前面は必須。背面・側面を追加すると精度が上がります。")
+    view_labels = ["前面（メイン・必須）", "背面（任意）", "左側面（任意）", "右側面（任意）"]
+    cols = st.columns(4)
+    uploaded_files = []
+    for col, label in zip(cols, view_labels):
+        f = col.file_uploader(label, type=["png", "jpg", "jpeg", "webp"], key=label)
+        if f:
+            uploaded_files.append(f)
+else:
+    f = st.file_uploader("画像をアップロード", type=["png", "jpg", "jpeg", "webp"])
+    uploaded_files = [f] if f else []
 
 if not uploaded_files:
     st.info("PNG または JPEG をアップロードしてください")
     st.stop()
 
-if not isinstance(uploaded_files, list):
-    uploaded_files = [uploaded_files]
-
 images = [Image.open(f).convert("RGB") for f in uploaded_files]
 image = images[0]
-extra_images = images[1:] if len(images) > 1 else []
+extra_images = images[1:]
 
-# サムネイル表示
-thumb_cols = st.columns(min(len(images), 4))
-labels = ["メイン（前面）", "背面", "左側面", "右側面", "その他"]
-for i, (col, img) in enumerate(zip(thumb_cols, images)):
-    col.image(img, caption=labels[i] if i < len(labels) else f"画像{i+1}", use_container_width=True)
+if mode == "trellis2":
+    st.caption(f"アップロード済み: {len(images)} 枚")
 
 col_img, col_depth = st.columns(2)
+col_img.image(image, caption=f"メイン画像（+ {len(extra_images)}枚）" if extra_images else "アップロード画像", use_container_width=True)
 
 # ── Claude analysis ───────────────────────────────────────────────────────────
 api_key = _secret("ANTHROPIC_API_KEY", anthropic_key)
