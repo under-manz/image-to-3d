@@ -10,9 +10,16 @@ import requests
 from PIL import Image
 
 
-def _save_tmp(image: Image.Image) -> str:
+def _save_tmp(image: Image.Image, size: int = 512) -> str:
+    """Resize to square (padding with white) and save as PNG."""
+    img = image.convert("RGBA")
+    img.thumbnail((size, size), Image.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (255, 255, 255, 255))
+    offset = ((size - img.width) // 2, (size - img.height) // 2)
+    canvas.paste(img, offset, img)
+    result = canvas.convert("RGB")
     tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-    image.convert("RGB").save(tmp.name, format="PNG")
+    result.save(tmp.name, format="PNG")
     tmp.close()
     return tmp.name
 
