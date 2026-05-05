@@ -67,14 +67,35 @@ with st.sidebar:
         invert_depth = st.toggle("深度を反転", value=False)
 
 # ── Upload ────────────────────────────────────────────────────────────────────
-uploaded = st.file_uploader("画像をアップロード", type=["png", "jpg", "jpeg", "webp"])
-if uploaded is None:
+multi_mode = mode == "trellis2"
+
+if multi_mode:
+    st.caption("💡 TRELLIS.2 は複数枚対応です。前面・背面・側面など複数アップロードすると精度が上がります。")
+
+uploaded_files = st.file_uploader(
+    "画像をアップロード（TRELLIS.2 は複数枚可）",
+    type=["png", "jpg", "jpeg", "webp"],
+    accept_multiple_files=multi_mode,
+)
+
+if not uploaded_files:
     st.info("PNG または JPEG をアップロードしてください")
     st.stop()
 
-image = Image.open(uploaded).convert("RGB")
+if not isinstance(uploaded_files, list):
+    uploaded_files = [uploaded_files]
+
+images = [Image.open(f).convert("RGB") for f in uploaded_files]
+image = images[0]
+extra_images = images[1:] if len(images) > 1 else []
+
+# サムネイル表示
+thumb_cols = st.columns(min(len(images), 4))
+labels = ["メイン（前面）", "背面", "左側面", "右側面", "その他"]
+for i, (col, img) in enumerate(zip(thumb_cols, images)):
+    col.image(img, caption=labels[i] if i < len(labels) else f"画像{i+1}", use_container_width=True)
+
 col_img, col_depth = st.columns(2)
-col_img.image(image, caption="アップロード画像", use_container_width=True)
 
 # ── Claude analysis ───────────────────────────────────────────────────────────
 api_key = _secret("ANTHROPIC_API_KEY", anthropic_key)
@@ -102,13 +123,24 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
 
     glb_bytes: bytes | None = None
 
-    SPACE_TASKS = {
-        "sf3d":     ("Stable Fast 3D で生成中（30秒〜2分）...",    spaces_generator.generate_stable_fast_3d),
-        "trellis2": ("TRELLIS.2 で生成中（2〜5分）...",            spaces_generator.generate_trellis2),
-        "triposg":  ("TripoSG で生成中（1〜3分）...",              spaces_generator.generate_triposg),
-    }
+    if mode == "trellis2":
+        n = len(images)
+        msg = f"TRELLIS.2 で生成中（{n}枚使用 / 2〜5分）..."
+        with st.spinner(msg):
+            try:
+                extra = [bg_remover.to_white_bg(bg_remover.remove_background(img))
+                         for img in extra_images] if remove_bg else extra_images
+                glb_bytes = spaces_generator.generate_trellis2(process_image, extra)
+            except Exception as e:
+                st.error(f"エラー: {e}")
+                st.code(traceback.format_exc())
+                st.stop()
 
-    if mode in SPACE_TASKS:
+    elif mode in ("sf3d", "triposg"):
+        SPACE_TASKS = {
+            "sf3d":    ("Stable Fast 3D で生成中（30秒〜2分）...", spaces_generator.generate_stable_fast_3d),
+            "triposg": ("TripoSG で生成中（1〜3分）...",           spaces_generator.generate_triposg),
+        }
         spinner_msg, fn = SPACE_TASKS[mode]
         with st.spinner(spinner_msg):
             try:

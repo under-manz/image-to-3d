@@ -77,27 +77,34 @@ def generate_stable_fast_3d(image: Image.Image) -> bytes:
         os.unlink(tmp)
 
 
-def generate_trellis2(image: Image.Image) -> bytes:
+def generate_trellis2(
+    image: Image.Image,
+    extra_images: list[Image.Image] | None = None,
+) -> bytes:
     """
     microsoft/TRELLIS.2 — high-quality 4B parameter structured 3D.
-    https://huggingface.co/spaces/microsoft/TRELLIS.2
+    extra_images: additional views (back, side, etc.) for better reconstruction.
     Two-step: image_to_3d → extract_glb
     """
     from gradio_client import Client, handle_file
 
     tmp = _save_tmp(image)
+    extra_tmps = [_save_tmp(img) for img in (extra_images or [])]
     try:
         client = Client("microsoft/TRELLIS.2")
 
+        multiimages = [handle_file(p) for p in extra_tmps]
+        algo = "multidiffusion" if multiimages else "stochastic"
+
         result = client.predict(
             image=handle_file(tmp),
-            multiimages=[],
+            multiimages=multiimages,
             seed=0,
             ss_guidance_strength=7.5,
             ss_sampling_steps=12,
             slat_guidance_strength=3.0,
             slat_sampling_steps=12,
-            multiimage_algo="stochastic",
+            multiimage_algo=algo,
             api_name="/image_to_3d",
         )
         state = result[0] if isinstance(result, (list, tuple)) else result
@@ -111,6 +118,8 @@ def generate_trellis2(image: Image.Image) -> bytes:
         return _to_bytes(glb_result)
     finally:
         os.unlink(tmp)
+        for p in extra_tmps:
+            os.unlink(p)
 
 
 def generate_triposg(image: Image.Image) -> bytes:
