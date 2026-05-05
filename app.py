@@ -1,6 +1,7 @@
 import os
 import pathlib
 import sys
+import traceback
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
@@ -90,6 +91,7 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
                 glb_bytes = spaces_generator.generate_trellis(image)
             except Exception as e:
                 st.error(f"TRELLIS エラー: {e}")
+                st.code(traceback.format_exc())
                 st.stop()
 
     elif mode == "triposr":
@@ -98,6 +100,7 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
                 glb_bytes = spaces_generator.generate_triposr(image)
             except Exception as e:
                 st.error(f"TripoSR エラー: {e}")
+                st.code(traceback.format_exc())
                 st.stop()
 
     elif mode == "instantmesh":
@@ -106,6 +109,7 @@ if st.button("3D モデルを生成", type="primary", use_container_width=True):
                 glb_bytes = spaces_generator.generate_instantmesh(image)
             except Exception as e:
                 st.error(f"InstantMesh エラー: {e}")
+                st.code(traceback.format_exc())
                 st.stop()
 
     elif mode == "midas_onnx":
