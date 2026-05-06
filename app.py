@@ -156,9 +156,12 @@ if mode in ("midas_onnx", "grayscale"):
         st.markdown(
             "深度マップ + テクスチャを ZIP でダウンロードし、"
             "ローカルの Blender で高品質な GLB を生成できます。\n\n"
-            "1. 下の **Blender用ZIPをダウンロード** を押す\n"
-            "2. ZIP を展開して `run.bat`（Windows）または `run.sh`（Mac/Linux）を実行\n"
-            "3. `output.glb` が生成されます\n\n"
+            "**手順**\n"
+            "1. 下の **Blender用ZIPを準備** を押す\n"
+            "2. ZIP をダウンロードして展開\n"
+            "3. **Windows** → `run.bat` をダブルクリック\n"
+            "4. 同フォルダに `output.glb` が生成される\n\n"
+            "> ZIPには `run.bat`（Windows用）と `run.sh`（Mac/Linux用）の両方が入っています。\n\n"
             "Blender をお持ちでない場合: https://www.blender.org/download/"
         )
 
