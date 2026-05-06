@@ -7,6 +7,8 @@ for %%P in (blender.exe) do set BLENDER=%%~$PATH:P
 
 if "%BLENDER%"=="" (
     for %%D in (
+        "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe"
+        "C:\Program Files\Blender Foundation\Blender 5.0\blender.exe"
         "C:\Program Files\Blender Foundation\Blender 4.4\blender.exe"
         "C:\Program Files\Blender Foundation\Blender 4.3\blender.exe"
         "C:\Program Files\Blender Foundation\Blender 4.2\blender.exe"
